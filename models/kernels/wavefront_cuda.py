@@ -3,14 +3,12 @@ import torch
 from torch.utils import cpp_extension
 from definitions import ROOT_DIR
 
-cpp_extension.load(name="wavefront_cuda",
-                   sources=[ROOT_DIR / "models/kernels/wf_cuda/wf_cuda_bind.cpp",
-                            ROOT_DIR / "models/kernels/wf_cuda/wf_cuda.cu"],
-                   extra_cflags=["-O2", "-fvisibility=hidden"],
-                   extra_cuda_cflags=["-Xptxas", "-O3"],
-                   verbose=False)
-
-from wavefront_cuda import wf_fwd, wf_bwd
+wf_cuda = cpp_extension.load(name="wavefront_cuda",
+                             sources=[ROOT_DIR / "models/kernels/wf_cuda/wf_cuda_bind.cpp",
+                                      ROOT_DIR / "models/kernels/wf_cuda/wf_cuda.cu"],
+                             extra_cflags=["-O2", "-fvisibility=hidden"],
+                             extra_cuda_cflags=["-Xptxas", "-O3"],
+                             verbose=False)
 
 class wf_cuda_fn(torch.autograd.Function):
     @staticmethod
@@ -23,7 +21,7 @@ class wf_cuda_fn(torch.autograd.Function):
         hs = torch.zeros_like(deltaAT, device=deltaAT.device)
 
         # Launch kernel
-        wf_fwd(hs, deltaAT, deltaAL, BXT, BXL)
+        wf_cuda.wf_fwd(hs, deltaAT, deltaAL, BXT, BXL)
 
         ctx.save_for_backward(hs, deltaAT, deltaAL)
 
@@ -53,7 +51,7 @@ class wf_cuda_fn(torch.autograd.Function):
         dBX[:,1:,1:,:,:] = 0.5
 
         # Launch kernel
-        wf_bwd(hs, deltaAT, deltaAL, grad_output, dDAT, dDAL, omega, dBX)
+        wf_cuda.wf_bwd(hs, deltaAT, deltaAL, grad_output, dDAT, dDAL, omega, dBX)
 
         # Fudge cols/rows as appropriate
         dBXT = dBX.clone(); dBXT[:,0,:,:,:] = 0
