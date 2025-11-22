@@ -30,6 +30,7 @@ class M2DBlock(nn.Module):
                  dt_scale: float = 1.0,
                  dt_init_floor = 1e-4,
                  double_scans: bool = False, # Enable/Disable 2 scans
+                 local_path: bool = False    # Enable/Disable local path
                 ):
         super().__init__()
 
@@ -39,6 +40,12 @@ class M2DBlock(nn.Module):
         self.expand_factor = expand_factor
         self.d_inner = self.expand_factor * self.d_model # E*D = ED in comments
         self.dt_rank = dt_rank
+
+        # Add SepConv local path
+        self.local_norm = nn.LayerNorm(self.d_model) if local_path else None
+        self.local_path = SepConv(self.d_model, expansion_ratio=2,
+        act1_layer=StarReLU, act2_layer=StarReLU, 
+        bias=False, kernel_size=3, padding=1, residual = False) if local_path else None
 
         # projects block input from D to ED (one_branch)
         self.in_proj = nn.Linear(self.d_model, self.d_inner)
@@ -138,13 +145,19 @@ class M2DBlock(nn.Module):
     def forward(self, x):
         # x : (B, H, W, ED)
 
+        if self.local_path: 
+            local_features = self.local_path(self.local_norm(x))            
+
         x = self.in_proj(x)
         x = self.act1(x)
         x = self.ssm(x)
         x = self.act2(x)
         x = self.out_proj(x)
 
-        return x
+        if self.local_path: 
+            x = x + local_features
+
+        return x 
 
     def proj_and_discretise(self, x):
         # x : (B, H, W, ED)
@@ -209,31 +222,6 @@ class M2DBlock(nn.Module):
 
         return y
 
-class M2DB_local(nn.Module):
-    '''
-        Add separable conv parallel branch for local features
-    '''
-    def __init__(self, dim):
-        super().__init__()
-
-        self.mamba = M2DBlock(dim)
-        self.local = SepConv(dim,
-                             expansion_ratio=2,
-                             act1_layer=StarReLU,
-                             act2_layer=StarReLU,
-                             bias=False,
-                             kernel_size=3,
-                             padding=1,
-                             residual= False)
-
-    def forward(self, x):
-        x1 = self.mamba(x)
-        x2 = self.local(x)
-
-        x = x1 + x2
-
-        return x
-
 # Adapted from: https://github.com/sail-sg/metaformer/blob/main/metaformer_baselines.py#L479
 class ResBlock(nn.Module):
     def __init__(self,
@@ -259,7 +247,7 @@ class ResBlock(nn.Module):
             case "2D_dbl_scan":
                 self.token_mixer = M2DBlock(embed_dim, double_scans=True)
             case "2D_local":
-                self.token_mixer = M2DB_local(embed_dim)
+                self.token_mixer = M2DBlock(embed_dim, local_path=True)
             case "Attention":
                 self.token_mixer = Attention(embed_dim)
             case "Id":

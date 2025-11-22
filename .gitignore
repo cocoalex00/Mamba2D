@@ -1,0 +1,28 @@
+# Ignore venv, vscode, pycache and compiled files
+.venv
+.vscode
+**/__pycache__/
+**/build/
+*.so
+
+# Ignore datasets but not datamodules.py
+datasets/*
+!datasets/__init__.py
+!datasets/datamodules.py
+!datasets/datasets.py
+!datasets/utils.py
+!datasets/imagenet
+datasets/imagenet/TrainingSet
+datasets/imagenet/ValidationSet
+
+# Ignore experiment outputs
+*.png
+*.ckpt
+
+# Ignore notebooks
+*.ipynb
+
+# Ignore logging, runs and profiling logs
+wandb/*
+runs/*
+*.nsys-rep

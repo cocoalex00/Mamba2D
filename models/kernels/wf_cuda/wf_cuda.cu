@@ -134,7 +134,7 @@ void wf_fwd_launcher(torch::Tensor& hs,
     int diag_len = 0;
     int max_diag_len = std::min(h,w);
 
-    AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::BFloat16, hs.type(), "wf_fwd_launcher", [&] () {
+    AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::BFloat16, hs.scalar_type(), "wf_fwd_launcher", [&] () {
         for (int diag = 0; diag < (h+w-1); diag++) {
 
             // Dynamically scale threads on diag
@@ -192,7 +192,7 @@ void wf_bwd_launcher(const torch::Tensor& hs,
     int diag_len = 0;
     int max_diag_len = std::min(h,w);
 
-    AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::BFloat16, hs.type(), "wf_bwd_launcher", [&] () {
+    AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::BFloat16, hs.scalar_type(), "wf_bwd_launcher", [&] () {
         for (int diag = (h+w-1)-1; diag >= 0; diag--) {
 
             // Dynamically scale threads on diag
