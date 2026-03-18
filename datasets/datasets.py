@@ -1,7 +1,6 @@
 import torch
 from PIL import Image
 from .imagenet.classes import IMAGENET2012_CLASSES
-from definitions import ROOT_DIR
 
 class ImageNet1k(torch.utils.data.Dataset):
     def __init__(self, root: str, split: str = 'train', transform=None):
@@ -19,9 +18,11 @@ class ImageNet1k(torch.utils.data.Dataset):
         self.split = split
         self.classes = list(IMAGENET2012_CLASSES)
 
-        imagenet_dir_path = ROOT_DIR / "datasets/imagenet"
-        
-        self.gt_file = imagenet_dir_path / "ImageNet_val_label.txt" if split in ['val'] else imagenet_dir_path / "ImageNet_train_labels.txt" # Ground truth file
+        # Ground truth file
+        if split in ['val']:
+            self.gt_file = "datasets/imagenet/ImageNet_val_label.txt"
+        else:
+            self.gt_file = "datasets/imagenet/ImageNet_train_labels.txt"
         
         # # Open the file with GT labels
         with open(self.gt_file, 'r') as file:
