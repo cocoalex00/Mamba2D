@@ -3,86 +3,10 @@ import lightning as L
 
 from torchvision.transforms import v2
 from torch.utils.data import default_collate
-from torchvision.datasets import MNIST, FashionMNIST, CIFAR10
 from timm.data import create_transform, Mixup
 
 from .datasets import ImageNet1k
 
-class MNISTDataModule(L.LightningDataModule):
-    def __init__(self,
-                 data_dir: str = "datasets",
-                 fashionMNIST: bool = False,
-                 batch_size: int = 32,
-                 num_workers: int = 19):
-        super().__init__()
-        self.data_dir = data_dir
-        self.fashionMNIST = fashionMNIST
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-
-    def setup(self, stage: str):
-        tf = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
-
-        if (self.fashionMNIST):
-            MNISTset = FashionMNIST
-        else:
-            MNISTset = MNIST
-
-        self.train_dataset = MNISTset(root=self.data_dir,
-                                   download=True,
-                                   train=True,
-                                   transform=tf)
-
-        self.val_dataset = MNISTset(root=self.data_dir,
-                                   download=True,
-                                   train=False,
-                                   transform=tf)
-
-    def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset,
-                                           shuffle=True,
-                                           batch_size=self.batch_size,
-                                           num_workers=self.num_workers)
-
-    def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.val_dataset,
-                                           batch_size=self.batch_size,
-                                           num_workers=self.num_workers)
-
-class CIFARDataModule(L.LightningDataModule):
-    def __init__(self,
-                 data_dir: str = "datasets",
-                 batch_size: int = 32,
-                 num_workers: int = 19):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-
-    def setup(self, stage: str):
-        tf = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
-
-        self.train_dataset = CIFAR10(root=self.data_dir,
-                                   download=True,
-                                   train=True,
-                                   transform=tf)
-
-        self.val_dataset = CIFAR10(root=self.data_dir,
-                                   download=True,
-                                   train=False,
-                                   transform=tf)
-
-    def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset,
-                                           shuffle=True,
-                                           batch_size=self.batch_size,
-                                           num_workers=self.num_workers)
-
-    def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.val_dataset,
-                                           batch_size=self.batch_size,
-                                           num_workers=self.num_workers)
-    
 class ImageNetDataModule(L.LightningDataModule):
     def __init__(self,
                  # DataModule Params
@@ -171,7 +95,8 @@ class ImageNetDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             collate_fn=self.cutmix_batch_tf_collate if self.cutmix else self.batch_tf_collate,
             pin_memory=True,
-            persistent_workers=True
+            persistent_workers=True,
+            drop_last=True if self.cutmix else False # Guard for even batch sizes
         )
 
     def val_dataloader(self):

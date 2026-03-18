@@ -1,0 +1,138 @@
+seed_everything: 0
+
+trainer:
+  accelerator: gpu
+  precision: bf16-mixed
+  devices: 1
+  #limit_train_batches: 100
+  #limit_val_batches: 100
+  logger:
+  - class_path: WandbLogger
+    init_args:
+      entity: 2D-Mamba
+      project: 2D-Mamba
+      # NOTE: Ensure a unique ID (w.r.t w&b and locally) is set before training
+      id: M2D-T-01
+      resume: allow
+      log_model: true
+      save_dir: runs/train/${trainer.logger[0].init_args.id}
+  max_epochs: 300
+  #gradient_clip_val: 1.0
+  #gradient_clip_algorithm: norm
+  accumulate_grad_batches: 64 # NOTE: Divide by number of devices when training!
+  check_val_every_n_epoch: 1
+  callbacks:
+  - class_path: ModelCheckpoint
+    init_args:
+      filename: last
+      save_last: true
+      save_top_k: 1
+      save_weights_only: false
+      mode: min
+      auto_insert_metric_name: false
+      enable_version_counter: false
+      dirpath: ${trainer.logger[0].init_args.save_dir}
+  - class_path: ModelCheckpoint
+    init_args:
+      filename: best
+      monitor: val/accuracy
+      save_top_k: 1
+      save_weights_only: false
+      mode: max
+      auto_insert_metric_name: false
+      enable_version_counter: false
+      dirpath: ${trainer.logger[0].init_args.save_dir}
+  ## Comment out to disable EMA
+  - class_path: __main__.EMA
+    init_args:
+      decay: 0.999
+      apply_ema_every_n_steps: 1
+      start_step: 0
+      save_ema_weights_in_callback_state: true
+      evaluate_ema_weights_instead: true
+  - class_path: __main__.EMAModelCheckpoint
+    init_args:
+      filename: last
+      save_last: true
+      save_top_k: 1
+      save_weights_only: false
+      mode: min
+      auto_insert_metric_name: false
+      enable_version_counter: false
+      dirpath: ${trainer.logger[0].init_args.save_dir}
+  - class_path: __main__.EMAModelCheckpoint
+    init_args:
+      filename: best
+      monitor: val/accuracy
+      save_top_k: 1
+      save_weights_only: false
+      mode: max
+      auto_insert_metric_name: false
+      enable_version_counter: false
+      dirpath: ${trainer.logger[0].init_args.save_dir}
+  ## End comment out to disable EMA
+  - class_path: LearningRateMonitor
+    init_args:
+      logging_interval: step
+      log_momentum: true
+  - class_path: ModelSummary
+    init_args:
+      max_depth: 3
+
+model: 
+  class_path: models.mamba2d_classifier.Mamba2DClassifier
+  init_args:
+    # Backbone Params
+    backbone:
+      class_path: models.mamba2d.Mamba2DBackbone
+      init_args:
+        # Input Params
+        in_channels: 3
+
+        # Model Params
+        channel_last: True
+        n_blocks: [3,3,9,3]
+        ds_stages: [mf_stem,mf_2,mf_2,mf_2]
+        embed_dim: [64, 128, 320, 512]
+        token_mixer: ["2D_local", "2D_local", "RopeAttention", "RopeAttention"]
+        drop_path_rate: 0.175
+        res_scale_init_values: [1.0,1.0,1.0,1.0]
+        inter_flip: true
+        recomp: partial
+
+    # Head Params
+    n_classes: 1000
+    head:
+      # MetaFormer MlpHead config
+      class_path: models.utils.MlpHead
+      init_args:
+        dim: ${model.init_args.backbone.init_args.embed_dim[3]}
+        n_classes: ${model.init_args.n_classes}
+        head_dropout: 0.15
+
+    # Loss config
+    cutmix: ${data.init_args.cutmix}
+
+    # Optimiser Params
+    lr: 4e-3
+    weight_decay: 0.05
+    warmup_pct: 0.05
+
+data:
+  class_path: datasets.datamodules.ImageNetDataModule
+  init_args:
+    # Dataset paths
+    data_dir: datasets/imagenet
+
+    # Speed options
+    img_dtype: torch.bfloat16
+    channel_last: ${model.init_args.backbone.init_args.channel_last}
+
+    # Augmentation Params
+    cutmix: True
+
+    # Dataloader
+    batch_size: 64
+    num_workers: 4
+
+ckpt_path: ${trainer.logger[0].init_args.save_dir}/last.ckpt

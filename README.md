@@ -3,7 +3,7 @@
 <h1>Mamba2D </h1>
 <h3>A Natively Multi-Dimensional State-Space Model for Vision Tasks</h3>
 
-[Enis Baty](https://scholar.google.co.uk/citations?user=SYOXFuoAAAAJ)<sup>1</sup> \*, [Alejandro Hernández Díaz](https://scholar.google.es/citations?user=C0baOcEAAAAJ&hl=es)<sup>1</sup> \*, [Chris Bridges](https://scholar.google.es/citations?user=iySVX8MAAAAJ&hl=es)<sup>1</sup>, [Rebecca Davidson](https://scholar.google.es/citations?user=WT4Xq1UAAAAJ&hl=es)<sup>2</sup>, Steve Eckersley<sup>2</sup>, [Simon Hadfield](https://scholar.google.es/citations?user=KuQs_N0AAAAJ&hl=es)<sup>1</sup> 
+[Enis Baty](https://scholar.google.co.uk/citations?user=SYOXFuoAAAAJ)<sup>1</sup> \*, [Alejandro Hernández Díaz](https://scholar.google.es/citations?user=C0baOcEAAAAJ&hl=es)<sup>1</sup> \*, [Rebecca Davidson](https://scholar.google.es/citations?user=WT4Xq1UAAAAJ&hl=es)<sup>2</sup>, [Chris Bridges](https://scholar.google.es/citations?user=iySVX8MAAAAJ&hl=es)<sup>1</sup>, [Simon Hadfield](https://scholar.google.es/citations?user=KuQs_N0AAAAJ&hl=es)<sup>1</sup>
 
 <sup>1</sup>  University of Surrey, <sup>2</sup>  Surrey Satellite Technology Ltd
 
@@ -14,133 +14,136 @@
 </div>
 
 ## Updates
+- `2026-03-18`: Updated codebase and results
+  - Updated CUDA wavefront kernel with partial recomputation, reducing peak VRAM by ~81% and forward+backward wall time by ~37% vs. prior implementation
+  - Improved classification results on ImageNet-1K
+  - Added MS-COCO detection and ADE20K segmentation results
 - `2025-04-17`: Released pretrained weights for M2D-T available [here](https://github.com/cocoalex00/Mamba2D/releases/tag/v1.0.0).
 
-## Introduction 
-State-Space Models (SSMs) have gained attention as a powerful and efficient alternative to transformer architectures. However, existing SSM designs are often rooted in biases inherited from their origins in natural language processing, which limits their ability to effectively model the spatial dependencies inherent in visual data.
+## Introduction
+State-Space Models (SSMs) have emerged as an efficient alternative to transformers, yet existing visual SSMs retain deeply ingrained biases from their origins in natural language processing. We address these limitations by introducing M2D-SSM, a ground-up re-derivation of selective state-space techniques for multidimensional data. Unlike prior works that apply 1D SSMs directly to images through arbitrary rasterised scanning, our M2D-SSM employs a single 2D scan that factors in both spatial dimensions natively.
 
-This repository introduces Mamba2D, a state-space model designed from a natively multidimensional perspective to address these limitations. Unlike prior approaches, which adapt 1D SSMs for 2D data (such as images) using arbitrary combinations of 1D scan directions, Mamba2D employs a single, unified 2D scan direction. This novel approach captures spatial dependencies across both dimensions simultaneously, enabling more effective construction of hidden states for visual inputs.
+<div align="center">
+<img src="assets/scan.webp" width=80%>
+</div>
+
+We achieve state-of-the-art speed and accuracy across a range of tasks and model sizes. On ImageNet-1K classification, M2D-T achieves 84.0% top-1 accuracy with only 27M parameters, surpassing all prior SSM-based vision models at that size. M2D-S further achieves 85.3%, establishing state-of-the-art among SSM-based architectures. Across downstream tasks, Mamba2D achieves 52.2 box AP on MS-COCO object detection (3× schedule) and 51.7 mIoU on ADE20K segmentation, demonstrating strong generalisation and efficiency at scale.
+
+<div align="center">
+<img src="assets/throughput.webp" width=70%>
+</div>
+
+*M2D (★) establishes a new accuracy–throughput–params frontier for SSM vision models.*
 
 ## Overview
-- Our 2-dimensional selective SSM is designed to model complex spatial relationships efficiently with a custom wavefront CUDA kernel.
 
 <div align="center">
-<img align="center" src="assets/kernel.png" width=65% height=65% 
-class="center">
+<img src="assets/arch.webp" width=80%>
 </div>
 
-- We introduce a novel mixer block by leveraging convolutions and SSMs to extract rich fine-grained and global features respectively.
+Mamba2D model architecture. A convolutional stem performs patch embedding, followed by four stages of feature extraction. Each stage consists of N blocks, comprising a token mixer and an FFN. The Mamba2D token mixer uses two parallel branches: our native 2D SSM path and a local processing path, whose outputs are combined before the FFN.
+
+---
 
 <div align="center">
-<img align="center" src="assets/block.png" width=40% height=50% 
-class="center">
+<img src="assets/scaling.webp" width=70%>
 </div>
 
+Kernel-level scaling of nine token-mixing operators across spatial resolutions (32²–2048²). M2D scales sub-linearly in latency (O(N^0.56)) due to the wavefront's diagonal-depth growth. At 1024² it is ~50× faster than Flash Attention, ~2.5× faster than VMamba SS2D, and ~4× faster than V2M, while maintaining linear memory scaling. Left: forward-pass latency (ms, log scale). Right: peak GPU memory (MB, log scale).
 
-
-- The proposed block can be integrated with standard attention to form a powerful and efficient vision backbone.
-<div align="center">
-<img align="center" src="assets/arch.png" 
-class="center">
-</div>
-
-
+---
 
 ## Installation
-1. Create conda environment
-    ```bash
-    conda create -n mamba2d python=3.11.9 
-    conda activate mamba2d
-    ```
-2. Install ``torch`` (version 2.4.1)
-    ```bash 
-    conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.1 -c pytorch -c nvidia
-    ```
-3. Install python dependencies:
-    ```bash 
-    pip install -r requirements.txt
-    ```
 
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install -r requirements.txt
+```
 
 ## Datasets
-### ImageNet
-We use standard ImageNet-1k dataset (2012), you can download it from [``This Link``](http://image-net.org/) . 
 
-Make sure that, once unzipped, the data has the following structure:
+### ImageNet
+Download the ImageNet-1K (2012) dataset from [image-net.org](http://image-net.org/). The expected directory structure is:
+
+```
+imagenet
+├── TrainingSet
+│   ├── n01440764
+│   │   ├── n01440764_18.JPEG
+│   │   └── ...
+│   └── ...
+└── ValidationSet
+    ├── ILSVRC2012_val_00000001.JPEG
+    └── ...
+```
+
+## Training
+
+Set the ImageNet path in `data.init_args.data_dir` within the config, then run:
 
 ```bash
-  $ tree data
-  imagenet
-  ├── TrainingSet
-  │   ├── n01440764
-  │   │   ├── n01440764_18.JPEG
-  │   │   ├── n01440764_36.JPEG
-  │   │   └── ...
-  │   ├── n01443537
-  │   │   ├── n01443537_23.JPEG
-  │   │   ├── n01443537_54.JPEG
-  │   │   └── ...
-  │   └── ...
-  └── ValidationSet
-      ├── ILSVRC2012_val_00000001.JPEG
-      ├── ILSVRC2012_val_00000002.JPEG
-      ├── ILSVRC2012_val_00000003.JPEG
-      └── ...
+# Sanity check (single batch)
+python main.py fit -c configs/M2D-T-ImageNet.yaml --trainer.fast_dev_run true
+
+# Train
+python main.py fit -c configs/M2D-T-ImageNet.yaml
 ```
-## Training
-### Backbone model (ImageNet)
-
-To train a ``Mamba2D`` model on ImageNet, edit the desired config to reflect the correct path containing the downloaded data i.e. `configs/backbone/Mamba2D-BB-ImNet.yaml` 
-
-```yaml
-...
-data:
-  class_path: datasets.datamodules.ImageNetDataModule
-  init_args:
-    # Dataset paths
-    data_dir: datasets/imagenet # add correct path here
-...
-```
->**NOTE:** Ensure that a unique ID is set in the init args of `WandbLogger` within
-the config to prevent logging to the wrong run!
-
-See below for examples on how to run and debug the training:
-
-```bash 
-# Test a config before running (single epoch)
-python main.py fit -c configs/backbone/Mamba2D-BB.yaml --trainer.fast_dev_run true
-
-# Test a config for multiple epochs before running (e.g. 10)
-python main.py fit -c configs/backbone/Mamba2D-BB.yaml --trainer.fast_dev_run 10
-
-# Train model (e.g. condor, resume is auto-configured within main.py)
-python main.py fit -c configs/backbone/Mamba2D-BB.yaml
-
-# Train model using multiple GPUs (e.g. 4), Note: Divide accumulate_grad_batches by number of devices in config
-python main.py fit -c configs/backbone/Mamba2D-BB.yaml --devices 4
-
-```
-
 
 ## Evaluation
-To evaluate ``Mamba2D`` on the validation split of ImageNet-1K using our provided weights, run:
 
 ```bash
-python main.py validate -c configs/backbone/Mamba2D-BB.yaml 
+python main.py validate -c configs/M2D-T-ImageNet.yaml --ckpt_path pretrained/M2D-T-backbone.ckpt
 ```
 
+## Downstream Tasks
+
+Detection and segmentation configs and integration code are provided in [`downstream/`](downstream/README.md). The setup is designed for drop-in use with existing MMDetection and MMSegmentation installations — copy the `Mamba2D/` backbone package and the relevant configs into your mm* project directory, then train or evaluate as normal. Configs are provided for all three model sizes across both Mask R-CNN (COCO) and UperNet (ADE20K). See [`downstream/README.md`](downstream/README.md) for full setup instructions.
+
+## Results & Pretrained Checkpoints
+
+### ImageNet-1K Classification
+
+| Model | Params | Blocks | Channels | Top-1 (%) | Checkpoint |
+|-------|--------|--------|----------|-----------|------------|
+| M2D-N | 7M | [3,3,9,3] | [32,64,160,256] | 79.6 | [M2D-N-backbone.ckpt](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-N-backbone.ckpt) |
+| M2D-T | 27M | [3,3,9,3] | [64,128,320,512] | 84.0 | [M2D-T-backbone.ckpt](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-T-backbone.ckpt) |
+| M2D-S | 50M | [3,12,14,3] | [96,192,384,576] | 85.3 | [M2D-S-backbone.ckpt](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-S-backbone.ckpt) |
+
+### MS-COCO Object Detection & Instance Segmentation (Mask R-CNN, 1×)
+
+| Model | Params | AP<sup>box</sup> | AP<sup>mask</sup> | Checkpoint |
+|-------|--------|--------|---------|------------|
+| M2D-N | 26M | 42.8 | 39.6 | [M2D-N-mask-rcnn-1x.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-N-mask-rcnn-1x.pth) |
+| M2D-T | 44M | 48.5 | 43.8 | [M2D-T-mask-rcnn-1x.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-T-mask-rcnn-1x.pth) |
+| M2D-S | 67M | 50.4 | 45.1 | [M2D-S-mask-rcnn-1x.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-S-mask-rcnn-1x.pth) |
+
+### MS-COCO Object Detection & Instance Segmentation (Mask R-CNN, 3×)
+
+| Model | Params | AP<sup>box</sup> | AP<sup>mask</sup> | Checkpoint |
+|-------|--------|--------|---------|------------|
+| M2D-N | 26M | 47.2 | 42.4 | [M2D-N-mask-rcnn-3x.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-N-mask-rcnn-3x.pth) |
+| M2D-T | 44M | 50.5 | 44.7 | [M2D-T-mask-rcnn-3x.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-T-mask-rcnn-3x.pth) |
+| M2D-S | 67M | 52.2 | 46.2 | [M2D-S-mask-rcnn-3x.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-S-mask-rcnn-3x.pth) |
+
+### ADE20K Semantic Segmentation (UperNet 160k)
+
+| Model | Params | mIoU (SS) | mIoU (MS) | Checkpoint |
+|-------|--------|-----------|-----------|------------|
+| M2D-N | 34M | 43.1 | 43.1 | [M2D-N-upernet.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-N-upernet.pth) |
+| M2D-T | 53M | 48.9 | 49.3 | [M2D-T-upernet.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-T-upernet.pth) |
+| M2D-S | 77M | 51.7 | 51.8 | [M2D-S-upernet.pth](https://github.com/cocoalex00/Mamba2D/releases/download/v2.0.0/M2D-S-upernet.pth) |
 
 ## Citation
 If Mamba2D is helpful for your research, please cite the following paper:
 
 ```
-@article{baty2024mamba2dnativelymultidimensionalstatespace,
-      title={Mamba2D: A Natively Multi-Dimensiona State-Space Model for Vision Tasks}, 
-      author={Enis Baty and Alejandro Hernández Díaz and Chris Bridges and Rebecca Davidson and Steve Eckersley and Simon Hadfield},
-      year={2024},
+@misc{baty2026mamba2dnativelymultidimensionalstatespace,
+      title={Mamba2D: A Natively Multi-Dimensional State-Space Model for Vision Tasks},
+      author={Enis Baty and Alejandro Hernández Díaz and Rebecca Davidson and Chris Bridges and Simon Hadfield},
+      year={2026},
       eprint={2412.16146},
       archivePrefix={arXiv},
       primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2412.16146}, 
+      url={https://arxiv.org/abs/2412.16146},
 }
 ```

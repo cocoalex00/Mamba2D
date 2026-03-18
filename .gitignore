@@ -18,11 +18,18 @@ datasets/imagenet/ValidationSet
 # Ignore experiment outputs
 *.png
 *.ckpt
+pretrained/*
 
 # Ignore notebooks
 *.ipynb
+
+# Ignore zip archives
+*.zip
 
 # Ignore logging, runs and profiling logs
 wandb/*
 runs/*
 *.nsys-rep
+
+# Ignore agent files
+.claude
