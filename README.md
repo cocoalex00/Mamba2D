@@ -18,6 +18,7 @@
   - Updated CUDA wavefront kernel with partial recomputation, reducing peak VRAM by ~81% and forward+backward wall time by ~37% vs. prior implementation
   - Improved classification results on ImageNet-1K
   - Added MS-COCO detection and ADE20K segmentation results
+  - Released pretrained weights for all model sizes (N/T/S) across classification, detection, and segmentation, available [here](https://github.com/cocoalex00/Mamba2D/releases/tag/v2.0.0)
 - `2025-04-17`: Released pretrained weights for M2D-T available [here](https://github.com/cocoalex00/Mamba2D/releases/tag/v1.0.0).
 
 ## Introduction
