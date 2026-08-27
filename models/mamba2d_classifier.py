@@ -142,7 +142,9 @@ class Mamba2DClassifier(L.LightningModule):
 
         self.log_dict({
                 "train/ce_loss" : loss,
-                "train/accuracy" : self.accuracy(preds, labels),
+                "train/accuracy" : self.accuracy(
+                    preds, labels.argmax(dim=1) if labels.ndim == 2 else labels
+                ),
             },
             batch_size = self.trainer.datamodule.batch_size,
             on_step=False, on_epoch=True, prog_bar=True, sync_dist=True
